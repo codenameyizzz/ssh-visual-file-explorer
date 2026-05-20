@@ -9,6 +9,7 @@ const DIRECTORY_MODE = 0o040000;
 const SYMLINK_MODE = 0o120000;
 const DOWNLOAD_TOKEN_TTL_MS = 5 * 60 * 1000;
 const DEV_DOWNLOAD_SECRET = "local-dev-download-secret-change-me";
+export const MAX_UPLOAD_SIZE_BYTES = 3 * 1024 * 1024;
 
 interface DownloadTokenPayload {
   credentials: SSHCredentials;
@@ -41,8 +42,8 @@ type SftpClient = {
   lstat: (remotePath: string, cb: (err: Error | undefined | null, stats: SftpStats) => void) => void;
   writeFile: (
     remotePath: string,
-    data: string,
-    options: { encoding: BufferEncoding },
+    data: string | Buffer,
+    options: { encoding?: BufferEncoding } | undefined,
     cb: (err?: Error | null) => void,
   ) => void;
   mkdir: (remotePath: string, attrs: Record<string, never>, cb: (err?: Error | null) => void) => void;
@@ -147,9 +148,14 @@ async function sftpLstat(sftp: SftpClient, remotePath: string) {
   });
 }
 
-async function sftpWriteFile(sftp: SftpClient, remotePath: string, content: string) {
+async function sftpWriteFile(
+  sftp: SftpClient,
+  remotePath: string,
+  content: string | Buffer,
+  options?: { encoding?: BufferEncoding },
+) {
   await new Promise<void>((resolve, reject) => {
-    sftp.writeFile(remotePath, content, { encoding: "utf8" }, (err) => {
+    sftp.writeFile(remotePath, content, options, (err) => {
       if (err) return reject(err);
       resolve();
     });
@@ -316,8 +322,27 @@ export async function writeRemoteFile(credentials: SSHCredentials, targetPath: s
   const ssh = await connectSSH(credentials);
   try {
     const sftp = await getSftp(ssh);
-    await sftpWriteFile(sftp, targetPath, content);
+    await sftpWriteFile(sftp, targetPath, content, { encoding: "utf8" });
     return { success: true };
+  } finally {
+    ssh.dispose();
+  }
+}
+
+export async function uploadRemoteFile(credentials: SSHCredentials, targetPath: string, fileBuffer: Buffer) {
+  if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+    throw new Error("Uploaded file is empty.");
+  }
+
+  if (fileBuffer.length > MAX_UPLOAD_SIZE_BYTES) {
+    throw new Error(`File is too large. Maximum supported upload size is ${Math.floor(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB.`);
+  }
+
+  const ssh = await connectSSH(credentials);
+  try {
+    const sftp = await getSftp(ssh);
+    await sftpWriteFile(sftp, targetPath, fileBuffer);
+    return { success: true, size: fileBuffer.length };
   } finally {
     ssh.dispose();
   }

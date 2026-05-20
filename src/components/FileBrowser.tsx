@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { SSHCredentials, FileItem } from "../types";
 import { 
   Folder, File, Download, Edit, Trash2, LogOut, RefreshCw, 
-  Search, FolderPlus, FilePlus, ChevronRight, Home, HardDrive, 
+  Search, FolderPlus, FilePlus, ChevronRight, Home, HardDrive, Upload, 
   ArrowUp, AlertCircle, Calendar, Shield, Cpu, Loader, AlertTriangle
 } from "lucide-react";
 
@@ -13,6 +13,8 @@ interface FileBrowserProps {
   onEditFile: (filePath: string, fileName: string) => void;
   onShowToast: (message: string, type: "success" | "error" | "info") => void;
 }
+
+const MAX_UPLOAD_SIZE_BYTES = 3 * 1024 * 1024;
 
 export default function FileBrowser({ credentials, initialPath, onDisconnect, onEditFile, onShowToast }: FileBrowserProps) {
   const [currentPath, setCurrentPath] = useState(initialPath || "");
@@ -27,6 +29,7 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   // Delete File States
   const [deleteCandidate, setDeleteCandidate] = useState<FileItem | null>(null);
@@ -34,6 +37,23 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
 
   // Buffer for raw path editing
   const [manualPath, setManualPath] = useState("");
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+
+  const readFileAsBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+        const base64Payload = result.split(",")[1];
+        if (!base64Payload) {
+          reject(new Error("Failed to read the selected file."));
+          return;
+        }
+        resolve(base64Payload);
+      };
+      reader.onerror = () => reject(new Error("Failed to read the selected file."));
+      reader.readAsDataURL(file);
+    });
 
   const loadDirectory = async (targetPath: string) => {
     setIsLoading(true);
@@ -254,6 +274,62 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
     }
   };
 
+  const handleUploadClick = () => {
+    uploadInputRef.current?.click();
+  };
+
+  const handleUploadFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    e.target.value = "";
+
+    if (!selectedFile) return;
+
+    if (selectedFile.size === 0) {
+      onShowToast("Selected file is empty.", "error");
+      return;
+    }
+
+    if (selectedFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      onShowToast("Upload limit is 3 MB per file on this build.", "error");
+      return;
+    }
+
+    const targetPath = currentPath === "/" ? `/${selectedFile.name}` : `${currentPath}/${selectedFile.name}`;
+    const existingEntry = files.find((item) => item.path === targetPath);
+    if (existingEntry && !window.confirm(`"${selectedFile.name}" already exists in this directory. Overwrite it?`)) {
+      return;
+    }
+
+    setIsUploading(true);
+    onShowToast(`Uploading "${selectedFile.name}" to remote host...`, "info");
+
+    try {
+      const contentBase64 = await readFileAsBase64(selectedFile);
+      const response = await fetch("/api/ssh/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credentials,
+          path: targetPath,
+          fileName: selectedFile.name,
+          contentBase64,
+        }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        onShowToast(`"${selectedFile.name}" uploaded successfully!`, "success");
+        await loadDirectory(currentPath);
+      } else {
+        onShowToast(result.error || "Failed to upload file.", "error");
+      }
+    } catch (err: any) {
+      onShowToast(err.message || "Failed to upload file.", "error");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Filter & search computation
   const filteredFiles = files.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -319,6 +395,28 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
           >
             <FilePlus className="w-3.5 h-3.5 text-blue-500" />
             New File
+          </button>
+
+          <input
+            ref={uploadInputRef}
+            type="file"
+            onChange={handleUploadFileChange}
+            className="hidden"
+          />
+
+          <button
+            id="upload-file-btn"
+            onClick={handleUploadClick}
+            disabled={isUploading}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-xs font-medium text-slate-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+            title="Upload a local file into the current remote directory"
+          >
+            {isUploading ? (
+              <Loader className="w-3.5 h-3.5 animate-spin text-sky-500" />
+            ) : (
+              <Upload className="w-3.5 h-3.5 text-sky-500" />
+            )}
+            Upload File
           </button>
 
           <button

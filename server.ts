@@ -3,6 +3,7 @@ import express from "express";
 import path from "node:path";
 import { createServer as createViteServer } from "vite";
 import {
+  MAX_UPLOAD_SIZE_BYTES,
   createDownloadToken,
   createRemoteDirectory,
   deleteRemotePath,
@@ -11,6 +12,7 @@ import {
   parseDownloadToken,
   readRemoteFile,
   testConnection,
+  uploadRemoteFile,
   writeRemoteFile,
 } from "./src/server/core.js";
 import type { SSHCredentials } from "./src/types.js";
@@ -29,8 +31,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: "4mb" }));
-app.use(express.urlencoded({ extended: true, limit: "4mb" }));
+app.use(express.json({ limit: "6mb" }));
+app.use(express.urlencoded({ extended: true, limit: "6mb" }));
 
 app.post("/api/ssh/test", async (req, res) => {
   try {
@@ -70,6 +72,39 @@ app.post("/api/ssh/write", async (req, res) => {
     const body = req.body as { credentials: SSHCredentials; path: string; content: string };
     res.setHeader("Cache-Control", "no-store");
     res.json(await writeRemoteFile(body.credentials, body.path, body.content));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected server error.";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+app.post("/api/ssh/upload", async (req, res) => {
+  try {
+    const body = req.body as {
+      credentials: SSHCredentials;
+      path: string;
+      fileName: string;
+      contentBase64: string;
+    };
+
+    if (!body.credentials || !body.path || !body.fileName || !body.contentBase64) {
+      return res.status(400).json({ success: false, error: "Credentials, path, file name, and file content are required." });
+    }
+
+    const fileBuffer = Buffer.from(body.contentBase64, "base64");
+    if (!fileBuffer.length) {
+      return res.status(400).json({ success: false, error: "Uploaded file is empty." });
+    }
+
+    if (fileBuffer.length > MAX_UPLOAD_SIZE_BYTES) {
+      return res.status(413).json({
+        success: false,
+        error: `File is too large. Maximum supported upload size is ${Math.floor(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB.`,
+      });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await uploadRemoteFile(body.credentials, body.path, fileBuffer));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error.";
     res.status(500).json({ success: false, error: message });

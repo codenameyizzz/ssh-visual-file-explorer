@@ -13,6 +13,16 @@ Project ini mendukung dua mode runtime:
 - Mengurangi ketergantungan pada command line untuk operasi file berbasis SSH
 - Menjaga arsitektur tetap ringan, mudah di-deploy, dan cukup aman untuk single-tenant usage
 
+## Fitur Utama
+
+- Koneksi ke host remote menggunakan password atau private key SSH
+- Browse direktori remote secara visual
+- Baca dan edit file teks langsung dari browser
+- Buat file dan folder baru
+- Upload file dari komputer lokal ke direktori remote aktif
+- Download file atau folder tanpa command manual
+- Hapus file atau folder secara rekursif
+
 ## Tech Stack
 
 ### Frontend
@@ -152,6 +162,7 @@ Folder [api/ssh](</C:/project-gabut/ssh-visual-file-explorer/api/ssh/test.ts:1>)
    - mengedit dan menyimpan file
    - membuat folder baru
    - membuat file baru
+   - mengunggah file dari komputer lokal
    - menghapus file atau folder
    - mengunduh file atau folder
 
@@ -196,6 +207,16 @@ Folder [api/ssh](</C:/project-gabut/ssh-visual-file-explorer/api/ssh/test.ts:1>)
 3. Jika target file atau symlink, backend menghapus langsung
 4. Jika target direktori, backend menghapus rekursif via SFTP
 
+#### Upload File
+
+1. User menekan tombol `Upload File`
+2. Browser memilih file dari komputer lokal
+3. Frontend membaca file dan mengubahnya menjadi payload Base64
+4. Frontend mengirim payload ke `/api/ssh/upload`
+5. Backend membuat koneksi SSH dan membuka SFTP
+6. Backend menulis file binary ke path remote target
+7. Frontend me-refresh isi direktori aktif
+
 #### Download File atau Folder
 
 1. Frontend meminta token ke `/api/ssh/download-ticket`
@@ -215,6 +236,7 @@ Project ini sudah mengandung beberapa pengamanan dasar:
 - operasi delete tidak memakai shell `rm -rf`
 - API dan app mengirim header keamanan dasar
 - folder download memakai token, bukan path terbuka langsung
+- upload file dibatasi kecil-menengah agar tetap kompatibel dengan deployment serverless
 
 Meski begitu, ada batasan desain yang tetap perlu dipahami:
 
@@ -222,6 +244,7 @@ Meski begitu, ada batasan desain yang tetap perlu dipahami:
 - deployment publik tanpa auth tambahan tidak cocok untuk multi-user environment
 - Vercel Functions bersifat stateless sehingga koneksi SSH dibuka ulang setiap request
 - file atau folder besar masih dapat terkena limit durasi function di platform serverless
+- upload file di deployment Vercel dibatasi oleh limit request body platform. Implementasi saat ini membatasi upload sampai 3 MB per file agar tetap aman di Vercel Hobby
 
 ## Environment Variables
 

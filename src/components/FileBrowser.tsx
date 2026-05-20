@@ -30,6 +30,7 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
   const [newFileName, setNewFileName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isBatchDownloading, setIsBatchDownloading] = useState(false);
   
   // Delete File States
   const [deleteCandidate, setDeleteCandidate] = useState<FileItem | null>(null);
@@ -37,6 +38,7 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
 
   // Buffer for raw path editing
   const [manualPath, setManualPath] = useState("");
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const readFileAsBase64 = (file: File) =>
@@ -69,6 +71,7 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
         setFiles(result.files);
         setCurrentPath(result.currentPath);
         setManualPath(result.currentPath);
+        setSelectedPaths([]);
         // Toast if it is a fresh directory load
         if (targetPath && targetPath !== currentPath) {
           onShowToast(`Loaded: ${result.currentPath}`, "success");
@@ -274,57 +277,118 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
     }
   };
 
+  const triggerBrowserDownload = (downloadUrl: string, filename: string) => {
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.setAttribute("download", filename);
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  };
+
+  const handleBatchDownload = async () => {
+    const selectedItems = files.filter((item) => selectedPaths.includes(item.path));
+    if (!selectedItems.length) {
+      onShowToast("Select at least one item before downloading.", "error");
+      return;
+    }
+
+    setIsBatchDownloading(true);
+    onShowToast(`Preparing bundled download for ${selectedItems.length} selected item(s)...`, "info");
+
+    try {
+      const response = await fetch("/api/ssh/download-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credentials,
+          items: selectedItems.map((item) => ({
+            path: item.path,
+            name: item.name,
+          })),
+        }),
+      });
+      const result = await response.json();
+
+      if (result.success && result.token) {
+        const downloadUrl = `/api/ssh/download?token=${result.token}`;
+        const bundleName = `${currentPath.split("/").filter(Boolean).pop() || "remote-files"}-selection.tar.gz`;
+        triggerBrowserDownload(downloadUrl, bundleName);
+        onShowToast(`Batch download started for ${selectedItems.length} item(s).`, "success");
+      } else {
+        onShowToast(result.error || "Failed to prepare batch download.", "error");
+      }
+    } catch (err: any) {
+      onShowToast(err.message || "Failed to prepare batch download.", "error");
+    } finally {
+      setIsBatchDownloading(false);
+    }
+  };
+
   const handleUploadClick = () => {
     uploadInputRef.current?.click();
   };
 
   const handleUploadFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
+    const selectedFiles: File[] = e.target.files ? Array.from(e.target.files as FileList) : [];
     e.target.value = "";
 
-    if (!selectedFile) return;
+    if (!selectedFiles.length) return;
 
-    if (selectedFile.size === 0) {
-      onShowToast("Selected file is empty.", "error");
+    const oversizedFiles = selectedFiles.filter((file) => file.size > MAX_UPLOAD_SIZE_BYTES);
+    if (oversizedFiles.length) {
+      onShowToast(`Upload limit is 3 MB per file. Rejected: ${oversizedFiles[0].name}`, "error");
       return;
     }
 
-    if (selectedFile.size > MAX_UPLOAD_SIZE_BYTES) {
-      onShowToast("Upload limit is 3 MB per file on this build.", "error");
+    const emptyFiles = selectedFiles.filter((file) => file.size === 0);
+    if (emptyFiles.length) {
+      onShowToast(`Selected file is empty: ${emptyFiles[0].name}`, "error");
       return;
     }
 
-    const targetPath = currentPath === "/" ? `/${selectedFile.name}` : `${currentPath}/${selectedFile.name}`;
-    const existingEntry = files.find((item) => item.path === targetPath);
-    if (existingEntry && !window.confirm(`"${selectedFile.name}" already exists in this directory. Overwrite it?`)) {
+    const conflictingFiles = selectedFiles.filter((file) => {
+      const targetPath = currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
+      return files.some((item) => item.path === targetPath);
+    });
+
+    if (
+      conflictingFiles.length &&
+      !window.confirm(`${conflictingFiles.length} selected file(s) already exist in this directory. Overwrite them?`)
+    ) {
       return;
     }
 
     setIsUploading(true);
-    onShowToast(`Uploading "${selectedFile.name}" to remote host...`, "info");
+    onShowToast(`Uploading ${selectedFiles.length} file(s) to remote host...`, "info");
 
     try {
-      const contentBase64 = await readFileAsBase64(selectedFile);
-      const response = await fetch("/api/ssh/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          credentials,
-          path: targetPath,
-          fileName: selectedFile.name,
-          contentBase64,
-        }),
-      });
-      const result = await response.json();
+      let uploadedCount = 0;
 
-      if (result.success) {
-        onShowToast(`"${selectedFile.name}" uploaded successfully!`, "success");
-        await loadDirectory(currentPath);
-      } else {
-        onShowToast(result.error || "Failed to upload file.", "error");
+      for (const selectedFile of selectedFiles) {
+        const targetPath = currentPath === "/" ? `/${selectedFile.name}` : `${currentPath}/${selectedFile.name}`;
+        const contentBase64 = await readFileAsBase64(selectedFile);
+        const response = await fetch("/api/ssh/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            credentials,
+            path: targetPath,
+            fileName: selectedFile.name,
+            contentBase64,
+          }),
+        });
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || `Failed to upload ${selectedFile.name}.`);
+        }
+        uploadedCount += 1;
       }
+
+      onShowToast(`${uploadedCount} file(s) uploaded successfully!`, "success");
+      await loadDirectory(currentPath);
     } catch (err: any) {
-      onShowToast(err.message || "Failed to upload file.", "error");
+      onShowToast(err.message || "Failed to upload file batch.", "error");
     } finally {
       setIsUploading(false);
     }
@@ -344,6 +408,23 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
 
   // Calculate breadcrumbs paths
   const pathSegments = currentPath.split("/").filter(Boolean);
+  const allVisibleSelected = filteredFiles.length > 0 && filteredFiles.every((item) => selectedPaths.includes(item.path));
+  const selectedCount = selectedPaths.length;
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedPaths((prev) => prev.filter((path) => !filteredFiles.some((item) => item.path === path)));
+      return;
+    }
+
+    setSelectedPaths((prev) => Array.from(new Set([...prev, ...filteredFiles.map((item) => item.path)])));
+  };
+
+  const toggleSelection = (itemPath: string) => {
+    setSelectedPaths((prev) =>
+      prev.includes(itemPath) ? prev.filter((path) => path !== itemPath) : [...prev, itemPath]
+    );
+  };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 font-sans" id="file-browser-container">
@@ -400,6 +481,7 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
           <input
             ref={uploadInputRef}
             type="file"
+            multiple
             onChange={handleUploadFileChange}
             className="hidden"
           />
@@ -416,7 +498,22 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
             ) : (
               <Upload className="w-3.5 h-3.5 text-sky-500" />
             )}
-            Upload File
+            Upload Files
+          </button>
+
+          <button
+            id="download-selected-btn"
+            onClick={handleBatchDownload}
+            disabled={isBatchDownloading || selectedCount === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-xs font-medium text-slate-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+            title="Download selected items as one archive"
+          >
+            {isBatchDownloading ? (
+              <Loader className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-emerald-500" />
+            )}
+            Download Selected{selectedCount > 0 ? ` (${selectedCount})` : ""}
           </button>
 
           <button
@@ -552,6 +649,15 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 text-[10px] font-bold tracking-wider uppercase select-none">
+                    <td className="w-10 text-center py-4">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        className="w-3.5 h-3.5 cursor-pointer"
+                        title="Select visible items"
+                      />
+                    </td>
                     <td className="w-11 text-center py-4"></td>
                     <td className="py-4 px-4 font-sans tracking-wider">Name</td>
                     <td className="py-4 px-4 font-sans hidden sm:table-cell tracking-wider">Size</td>
@@ -569,6 +675,15 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
                         item.isDirectory ? "cursor-pointer" : ""
                       }`}
                     >
+                      <td className="px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedPaths.includes(item.path)}
+                          onChange={() => toggleSelection(item.path)}
+                          className="w-3.5 h-3.5 cursor-pointer"
+                          title={`Select ${item.name}`}
+                        />
+                      </td>
                       {/* Icon */}
                       <td className="px-5 text-center">
                         {item.isDirectory ? (

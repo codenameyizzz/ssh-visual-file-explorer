@@ -15,7 +15,7 @@ export default {
 
     try {
       const payload = parseDownloadToken(token);
-      const result = await openDownloadStream(payload.credentials, payload.targetPath, payload.isDirectory);
+      const result = await openDownloadStream(payload.credentials, payload.targetPath, payload.isDirectory, payload.items);
       const cleanup = () => result.cleanup();
 
       result.stream.on("close", cleanup);

@@ -13,8 +13,12 @@ export const MAX_UPLOAD_SIZE_BYTES = 3 * 1024 * 1024;
 
 interface DownloadTokenPayload {
   credentials: SSHCredentials;
-  targetPath: string;
-  isDirectory: boolean;
+  targetPath?: string;
+  isDirectory?: boolean;
+  items?: Array<{
+    path: string;
+    name: string;
+  }>;
   expiresAt: number;
 }
 
@@ -23,6 +27,11 @@ export interface DownloadStreamResult {
   contentType: string;
   stream: NodeJS.ReadableStream;
   cleanup: () => void;
+}
+
+export interface DownloadItemRequest {
+  path: string;
+  name: string;
 }
 
 type SftpStats = {
@@ -66,6 +75,10 @@ function posixJoin(basePath: string, childName: string) {
 
 function escapePosixShellArg(value: string) {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function sanitizeArchiveBaseName(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "download-bundle";
 }
 
 function getDownloadSecret() {
@@ -382,18 +395,76 @@ export function createDownloadToken(credentials: SSHCredentials, targetPath: str
   };
 }
 
+export function createBatchDownloadToken(credentials: SSHCredentials, items: DownloadItemRequest[]) {
+  if (!items.length) {
+    throw new Error("At least one item is required for batch download.");
+  }
+
+  return {
+    success: true,
+    token: encryptPayload({
+      credentials,
+      items,
+      expiresAt: Date.now() + DOWNLOAD_TOKEN_TTL_MS,
+    }),
+  };
+}
+
 export function parseDownloadToken(token: string) {
   return decryptPayload(token);
 }
 
+async function openBatchDownloadStream(ssh: NodeSSH, items: DownloadItemRequest[]): Promise<DownloadStreamResult> {
+  if (!items.length) {
+    throw new Error("No items provided for batch download.");
+  }
+
+  const parentDir = path.posix.dirname(items[0].path);
+  const sameParent = items.every((item) => path.posix.dirname(item.path) === parentDir);
+  if (!sameParent) {
+    throw new Error("Batch download currently requires all selected items to be in the same directory.");
+  }
+
+  const conn = ssh.connection;
+  if (!conn) {
+    throw new Error("SSH connection not accessible.");
+  }
+
+  const tarTargets = items.map((item) => escapePosixShellArg(path.posix.basename(item.path))).join(" ");
+  const archiveBaseName = sanitizeArchiveBaseName(path.posix.basename(parentDir) || "download-bundle");
+  const command = `tar -czf - -C ${escapePosixShellArg(parentDir)} ${tarTargets}`;
+  const stream = await new Promise<NodeJS.ReadableStream>((resolve, reject) => {
+    conn.exec(command, (err, remoteStream) => {
+      if (err) return reject(err);
+      resolve(remoteStream);
+    });
+  });
+
+  return {
+    filename: `${archiveBaseName}-selection.tar.gz`,
+    contentType: "application/gzip",
+    stream,
+    cleanup: () => ssh.dispose(),
+  };
+}
+
 export async function openDownloadStream(
   credentials: SSHCredentials,
-  targetPath: string,
-  isDirectory: boolean,
+  targetPath?: string,
+  isDirectory?: boolean,
+  items?: DownloadItemRequest[],
 ): Promise<DownloadStreamResult> {
   const ssh = await connectSSH(credentials);
 
   try {
+    if (items?.length) {
+      return await openBatchDownloadStream(ssh, items);
+    }
+
+    if (!targetPath) {
+      throw new Error("Target path is required.");
+    }
+
     if (isDirectory) {
       const parentDir = path.posix.dirname(targetPath);
       const folderName = path.posix.basename(targetPath);

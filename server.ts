@@ -4,6 +4,7 @@ import path from "node:path";
 import { createServer as createViteServer } from "vite";
 import {
   MAX_UPLOAD_SIZE_BYTES,
+  createBatchDownloadToken,
   createDownloadToken,
   createRemoteDirectory,
   deleteRemotePath,
@@ -135,9 +136,23 @@ app.post("/api/ssh/delete", async (req, res) => {
 
 app.post("/api/ssh/download-ticket", async (req, res) => {
   try {
-    const body = req.body as { credentials: SSHCredentials; path: string; isDirectory: boolean };
-    if (!body.credentials || !body.path) {
-      return res.status(400).json({ success: false, error: "Credentials and target path are required." });
+    const body = req.body as {
+      credentials: SSHCredentials;
+      path?: string;
+      isDirectory?: boolean;
+      items?: Array<{ path: string; name: string }>;
+    };
+    if (!body.credentials) {
+      return res.status(400).json({ success: false, error: "Credentials are required." });
+    }
+
+    if (body.items?.length) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.json(createBatchDownloadToken(body.credentials, body.items));
+    }
+
+    if (!body.path) {
+      return res.status(400).json({ success: false, error: "Target path is required." });
     }
     res.setHeader("Cache-Control", "no-store");
     res.json(createDownloadToken(body.credentials, body.path, !!body.isDirectory));
@@ -155,7 +170,7 @@ app.get("/api/ssh/download", async (req, res) => {
 
   try {
     const payload = parseDownloadToken(token);
-    const result = await openDownloadStream(payload.credentials, payload.targetPath, payload.isDirectory);
+    const result = await openDownloadStream(payload.credentials, payload.targetPath, payload.isDirectory, payload.items);
     const cleanup = () => result.cleanup();
 
     res.setHeader("Cache-Control", "no-store");

@@ -19,8 +19,9 @@ Project ini mendukung dua mode runtime:
 - Browse direktori remote secara visual
 - Baca dan edit file teks langsung dari browser
 - Buat file dan folder baru
-- Upload file dari komputer lokal ke direktori remote aktif
+- Upload satu atau banyak file dari komputer lokal ke direktori remote aktif
 - Download file atau folder tanpa command manual
+- Download banyak item terpilih sekaligus sebagai satu arsip
 - Hapus file atau folder secara rekursif
 
 ## Tech Stack
@@ -162,9 +163,9 @@ Folder [api/ssh](</C:/project-gabut/ssh-visual-file-explorer/api/ssh/test.ts:1>)
    - mengedit dan menyimpan file
    - membuat folder baru
    - membuat file baru
-   - mengunggah file dari komputer lokal
+   - mengunggah satu atau banyak file dari komputer lokal
    - menghapus file atau folder
-   - mengunduh file atau folder
+   - mengunduh satu file, satu folder, atau banyak item terpilih
 
 ### Workflow Request Teknis
 
@@ -210,9 +211,9 @@ Folder [api/ssh](</C:/project-gabut/ssh-visual-file-explorer/api/ssh/test.ts:1>)
 #### Upload File
 
 1. User menekan tombol `Upload File`
-2. Browser memilih file dari komputer lokal
-3. Frontend membaca file dan mengubahnya menjadi payload Base64
-4. Frontend mengirim payload ke `/api/ssh/upload`
+2. Browser memilih satu atau banyak file dari komputer lokal
+3. Frontend membaca setiap file dan mengubahnya menjadi payload Base64
+4. Frontend mengirim file-file tersebut ke `/api/ssh/upload` secara berurutan
 5. Backend membuat koneksi SSH dan membuka SFTP
 6. Backend menulis file binary ke path remote target
 7. Frontend me-refresh isi direktori aktif
@@ -225,6 +226,7 @@ Folder [api/ssh](</C:/project-gabut/ssh-visual-file-explorer/api/ssh/test.ts:1>)
 4. Backend memverifikasi token
 5. Jika target file, backend stream file via SFTP
 6. Jika target folder, backend menjalankan `tar -czf -` di host remote lalu stream hasil arsip ke browser
+7. Jika target adalah banyak item terpilih, backend membungkus semuanya sebagai satu `.tar.gz`
 
 ## Security dan Design Considerations
 

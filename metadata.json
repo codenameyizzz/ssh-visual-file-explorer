@@ -2,5 +2,5 @@
   "name": "SSH Visual File Explorer",
   "description": "Visual explorer to browse folders, download files/folders, and edit file contents on any SSH remote server without manual scp commands.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

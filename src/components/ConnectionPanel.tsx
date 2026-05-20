@@ -8,6 +8,8 @@ interface ConnectionPanelProps {
   onShowToast: (message: string, type: "success" | "error" | "info") => void;
 }
 
+type SavedConnectionDraft = Pick<SSHCredentials, "host" | "username" | "port" | "authType">;
+
 export default function ConnectionPanel({ onConnect, isConnecting, onShowToast }: ConnectionPanelProps) {
   const [host, setHost] = useState("");
   const [username, setUsername] = useState("");
@@ -23,16 +25,13 @@ export default function ConnectionPanel({ onConnect, isConnecting, onShowToast }
   // Load saved credentials from localStorage on component mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("ssh_explorer_creds");
+      const saved = localStorage.getItem("ssh_explorer_connection");
       if (saved) {
-        const parsed = JSON.parse(saved) as SSHCredentials;
+        const parsed = JSON.parse(saved) as SavedConnectionDraft;
         if (parsed.host) setHost(parsed.host);
         if (parsed.username) setUsername(parsed.username);
         if (parsed.port) setPort(parsed.port);
         if (parsed.authType) setAuthType(parsed.authType);
-        if (parsed.privateKey) setPrivateKey(parsed.privateKey);
-        if (parsed.password) setPassword(parsed.password);
-        if (parsed.passphrase) setPassphrase(parsed.passphrase);
       }
     } catch (e) {
       console.error("Failed to load saved credentials", e);
@@ -53,9 +52,15 @@ export default function ConnectionPanel({ onConnect, isConnecting, onShowToast }
 
   const handleSaveCredentials = (creds: SSHCredentials) => {
     if (rememberKeys) {
-      localStorage.setItem("ssh_explorer_creds", JSON.stringify(creds));
+      const safeDraft: SavedConnectionDraft = {
+        host: creds.host,
+        username: creds.username,
+        port: creds.port,
+        authType: creds.authType,
+      };
+      localStorage.setItem("ssh_explorer_connection", JSON.stringify(safeDraft));
     } else {
-      localStorage.removeItem("ssh_explorer_creds");
+      localStorage.removeItem("ssh_explorer_connection");
     }
   };
 
@@ -378,7 +383,7 @@ export default function ConnectionPanel({ onConnect, isConnecting, onShowToast }
                 className="rounded border-slate-300 text-sky-600 focus:ring-sky-500/20 w-4 h-4 cursor-pointer"
               />
               <label htmlFor="remember-keys" className="text-xs text-slate-500 font-medium cursor-pointer selection:bg-transparent">
-                Keep details saved in browser local storage
+                Save only host, username, port, and auth mode in this browser
               </label>
             </div>
           </div>

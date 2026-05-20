@@ -109,7 +109,7 @@ export default function FileEditor({ credentials, filePath, fileName, onClose, o
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] bg-slate-900 text-slate-400 space-y-4">
+      <div className="flex flex-col items-center justify-center h-full bg-slate-900 text-slate-400 space-y-4">
         <Loader className="w-8 h-8 animate-spin text-sky-400" />
         <div className="text-center">
           <p className="text-sm font-semibold text-slate-200">Retrieving File Stream</p>
@@ -120,7 +120,7 @@ export default function FileEditor({ credentials, filePath, fileName, onClose, o
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-950 text-slate-100 font-sans relative" id="file-editor-container">
+    <div className="flex flex-col h-full bg-slate-950 text-slate-100 font-sans relative" id="file-editor-container">
       {/* Editor Header */}
       <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">

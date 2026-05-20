@@ -270,7 +270,7 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
   const pathSegments = currentPath.split("/").filter(Boolean);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50 font-sans" id="file-browser-container">
+    <div className="flex flex-col h-full bg-slate-50 font-sans" id="file-browser-container">
       {/* Top Banner Control Rail */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm relative z-10 shrink-0">
         <div className="flex items-center gap-3">

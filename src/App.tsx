@@ -90,7 +90,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 relative">
+      <main className="flex-1 relative min-h-0">
         {currentView === "connect" && (
           <div className="py-6">
             <ConnectionPanel
@@ -125,6 +125,10 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <footer className="shrink-0 border-t border-slate-200 bg-white/90 px-6 py-2 text-center text-[11px] text-slate-500">
+        &copy; Yizreel Schwartz Sipahutar 2026
+      </footer>
 
       <div className="fixed bottom-5 right-5 space-y-2 z-50 pointer-events-none max-w-sm w-full font-sans">
         {toasts.map((toast) => (

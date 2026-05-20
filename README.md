@@ -22,6 +22,7 @@ Project ini mendukung dua mode runtime:
 - Upload satu atau banyak file dari komputer lokal ke direktori remote aktif
 - Download file atau folder tanpa command manual
 - Download banyak item terpilih sekaligus sebagai satu arsip
+- Terminal semi-interaktif untuk menjalankan command remote seperti `gemini -p "..."`, `codex "..."`, `git status`, dan command CLI satu-shot lainnya
 - Hapus file atau folder secara rekursif
 
 ## Tech Stack
@@ -107,6 +108,8 @@ Frontend dimulai dari [src/main.tsx](</C:/project-gabut/ssh-visual-file-explorer
   Menampilkan isi direktori remote, breadcrumb, pencarian, pembuatan file/folder, download, dan delete.
 - [FileEditor.tsx](</C:/project-gabut/ssh-visual-file-explorer/src/components/FileEditor.tsx:1>)
   Menyediakan editor file teks sederhana dengan save, revert, dan unsaved-change handling.
+- [TerminalPanel.tsx](</C:/project-gabut/ssh-visual-file-explorer/src/components/TerminalPanel.tsx:1>)
+  Menyediakan terminal semi-interaktif berbasis command runner dengan dukungan current working directory, history sederhana, dan output command.
 
 ### 2. Shared SSH Core
 
@@ -164,8 +167,18 @@ Folder [api/ssh](</C:/project-gabut/ssh-visual-file-explorer/api/ssh/test.ts:1>)
    - membuat folder baru
    - membuat file baru
    - mengunggah satu atau banyak file dari komputer lokal
+   - menjalankan command remote melalui terminal semi-interaktif
    - menghapus file atau folder
    - mengunduh satu file, satu folder, atau banyak item terpilih
+
+#### Terminal Semi-Interaktif
+
+1. User membuka tombol `Terminal` dari browser direktori
+2. Frontend membawa path direktori aktif sebagai current working directory awal
+3. User mengetik command seperti `pwd`, `ls -la`, `gemini -p "..."`, atau `codex "..."`
+4. Frontend mengirim command ke `/api/ssh/exec`
+5. Backend membuka koneksi SSH, menjalankan command dari direktori kerja aktif, lalu mengembalikan `stdout`, `stderr`, `exitCode`, dan `nextCwd`
+6. Frontend menampilkan output sebagai log command
 
 ### Workflow Request Teknis
 
@@ -239,6 +252,7 @@ Project ini sudah mengandung beberapa pengamanan dasar:
 - API dan app mengirim header keamanan dasar
 - folder download memakai token, bukan path terbuka langsung
 - upload file dibatasi kecil-menengah agar tetap kompatibel dengan deployment serverless
+- terminal semi-interaktif menjalankan command arbitrary di host remote, sehingga fitur ini hanya aman bila akses app dibatasi ke user yang benar-benar dipercaya
 
 Meski begitu, ada batasan desain yang tetap perlu dipahami:
 
@@ -247,6 +261,7 @@ Meski begitu, ada batasan desain yang tetap perlu dipahami:
 - Vercel Functions bersifat stateless sehingga koneksi SSH dibuka ulang setiap request
 - file atau folder besar masih dapat terkena limit durasi function di platform serverless
 - upload file di deployment Vercel dibatasi oleh limit request body platform. Implementasi saat ini membatasi upload sampai 3 MB per file agar tetap aman di Vercel Hobby
+- terminal yang disediakan saat ini bukan TTY/PTY penuh, sehingga cocok untuk command satu-shot dan CLI non-interaktif, tetapi belum ideal untuk session interaktif penuh seperti terminal SSH native
 
 ## Environment Variables
 

@@ -34,6 +34,16 @@ export interface DownloadItemRequest {
   name: string;
 }
 
+export interface RemoteCommandResult {
+  success: boolean;
+  command: string;
+  cwd: string;
+  nextCwd: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}
+
 type SftpStats = {
   mode: number;
   size: number;
@@ -79,6 +89,23 @@ function escapePosixShellArg(value: string) {
 
 function sanitizeArchiveBaseName(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "download-bundle";
+}
+
+function parseTaggedStdout(stdout: string, marker: string) {
+  const markerIndex = stdout.lastIndexOf(marker);
+  if (markerIndex === -1) {
+    return {
+      stdout: stdout.trimEnd(),
+      taggedValue: "",
+    };
+  }
+
+  const cleanStdout = stdout.slice(0, markerIndex).trimEnd();
+  const taggedValue = stdout.slice(markerIndex + marker.length).trim();
+  return {
+    stdout: cleanStdout,
+    taggedValue,
+  };
 }
 
 function getDownloadSecret() {
@@ -274,6 +301,45 @@ export async function testConnection(credentials: SSHCredentials) {
   try {
     const homeDir = await resolveHomeDirectory(ssh);
     return { success: true, homeDir };
+  } finally {
+    ssh.dispose();
+  }
+}
+
+export async function runRemoteCommand(
+  credentials: SSHCredentials,
+  command: string,
+  cwdInput?: string,
+): Promise<RemoteCommandResult> {
+  const trimmedCommand = command.trim();
+  if (!trimmedCommand) {
+    throw new Error("Command is required.");
+  }
+
+  const ssh = await connectSSH(credentials);
+  try {
+    const baseCwd = await resolveRemotePath(ssh, cwdInput);
+    const marker = `__SSH_VISUAL_FILE_EXPLORER_PWD__${crypto.randomUUID()}__`;
+    const script = [
+      `cd ${escapePosixShellArg(baseCwd)} || exit $?`,
+      trimmedCommand,
+      "exit_code=$?",
+      `printf '\\n${marker}%s\\n' \"$PWD\"`,
+      "exit $exit_code",
+    ].join("; ");
+    const wrappedCommand = `sh -lc ${escapePosixShellArg(script)}`;
+    const result = await ssh.execCommand(wrappedCommand);
+    const parsed = parseTaggedStdout(result.stdout || "", marker);
+
+    return {
+      success: (result.code ?? 1) === 0,
+      command: trimmedCommand,
+      cwd: baseCwd,
+      nextCwd: parsed.taggedValue || baseCwd,
+      stdout: parsed.stdout,
+      stderr: (result.stderr || "").trimEnd(),
+      exitCode: result.code ?? null,
+    };
   } finally {
     ssh.dispose();
   }

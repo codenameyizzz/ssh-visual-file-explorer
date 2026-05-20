@@ -3,13 +3,15 @@ import { Check, Info, Terminal, X } from "lucide-react";
 import FileBrowser from "./components/FileBrowser";
 import ConnectionPanel from "./components/ConnectionPanel";
 import FileEditor from "./components/FileEditor";
+import TerminalPanel from "./components/TerminalPanel";
 import { SSHCredentials } from "./types";
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<"connect" | "browser" | "editor">("connect");
+  const [currentView, setCurrentView] = useState<"connect" | "browser" | "editor" | "terminal">("connect");
   const [credentials, setCredentials] = useState<SSHCredentials | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [initialPath, setInitialPath] = useState("");
+  const [terminalPath, setTerminalPath] = useState("");
   const [activeFilePath, setActiveFilePath] = useState("");
   const [activeFileName, setActiveFileName] = useState("");
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: "success" | "error" | "info" }>>([]);
@@ -37,6 +39,7 @@ export default function App() {
       if (result.success) {
         setCredentials(creds);
         setInitialPath(result.homeDir || "");
+        setTerminalPath(result.homeDir || "");
         setCurrentView("browser");
         addToast("SSH session established. Launching directory browser!", "success");
       } else {
@@ -52,6 +55,7 @@ export default function App() {
   const handleDisconnect = () => {
     setCredentials(null);
     setInitialPath("");
+    setTerminalPath("");
     setCurrentView("connect");
     addToast("SSH link dismantled. Connection closed.", "info");
   };
@@ -63,6 +67,15 @@ export default function App() {
   };
 
   const finishEditingFile = () => {
+    setCurrentView("browser");
+  };
+
+  const openTerminal = (startPath: string) => {
+    setTerminalPath(startPath || initialPath);
+    setCurrentView("terminal");
+  };
+
+  const closeTerminal = () => {
     setCurrentView("browser");
   };
 
@@ -108,6 +121,7 @@ export default function App() {
               initialPath={initialPath}
               onDisconnect={handleDisconnect}
               onEditFile={startEditingFile}
+              onOpenTerminal={openTerminal}
               onShowToast={addToast}
             />
           </div>
@@ -120,6 +134,17 @@ export default function App() {
               filePath={activeFilePath}
               fileName={activeFileName}
               onClose={finishEditingFile}
+              onShowToast={addToast}
+            />
+          </div>
+        )}
+
+        {credentials && (
+          <div className={currentView === "terminal" ? "block animate-fade-in h-full" : "hidden"}>
+            <TerminalPanel
+              credentials={credentials}
+              initialPath={terminalPath || initialPath}
+              onBack={closeTerminal}
               onShowToast={addToast}
             />
           </div>

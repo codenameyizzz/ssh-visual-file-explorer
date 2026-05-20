@@ -12,6 +12,7 @@ import {
   openDownloadStream,
   parseDownloadToken,
   readRemoteFile,
+  runRemoteCommand,
   testConnection,
   uploadRemoteFile,
   writeRemoteFile,
@@ -43,6 +44,17 @@ app.post("/api/ssh/test", async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error.";
     res.status(400).json({ success: false, error: message });
+  }
+});
+
+app.post("/api/ssh/exec", async (req, res) => {
+  try {
+    const body = req.body as { credentials: SSHCredentials; command: string; cwd?: string };
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await runRemoteCommand(body.credentials, body.command, body.cwd));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected server error.";
+    res.status(500).json({ success: false, error: message });
   }
 });
 

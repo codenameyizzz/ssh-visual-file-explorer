@@ -3,7 +3,7 @@ import { SSHCredentials, FileItem } from "../types";
 import { 
   Folder, File, Download, Edit, Trash2, LogOut, RefreshCw, 
   Search, FolderPlus, FilePlus, ChevronRight, Home, HardDrive, Upload, 
-  ArrowUp, AlertCircle, Calendar, Shield, Cpu, Loader, AlertTriangle
+  ArrowUp, AlertCircle, Calendar, Shield, Cpu, Loader, AlertTriangle, TerminalSquare
 } from "lucide-react";
 
 interface FileBrowserProps {
@@ -11,12 +11,13 @@ interface FileBrowserProps {
   initialPath: string;
   onDisconnect: () => void;
   onEditFile: (filePath: string, fileName: string) => void;
+  onOpenTerminal: (startPath: string) => void;
   onShowToast: (message: string, type: "success" | "error" | "info") => void;
 }
 
 const MAX_UPLOAD_SIZE_BYTES = 3 * 1024 * 1024;
 
-export default function FileBrowser({ credentials, initialPath, onDisconnect, onEditFile, onShowToast }: FileBrowserProps) {
+export default function FileBrowser({ credentials, initialPath, onDisconnect, onEditFile, onOpenTerminal, onShowToast }: FileBrowserProps) {
   const [currentPath, setCurrentPath] = useState(initialPath || "");
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -514,6 +515,16 @@ export default function FileBrowser({ credentials, initialPath, onDisconnect, on
               <Download className="w-3.5 h-3.5 text-emerald-500" />
             )}
             Download Selected{selectedCount > 0 ? ` (${selectedCount})` : ""}
+          </button>
+
+          <button
+            id="open-terminal-btn"
+            onClick={() => onOpenTerminal(currentPath || initialPath)}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-xs font-medium text-slate-700 rounded-lg transition-colors cursor-pointer"
+            title="Open the semi-interactive remote terminal from this directory"
+          >
+            <TerminalSquare className="w-3.5 h-3.5 text-violet-500" />
+            Terminal
           </button>
 
           <button

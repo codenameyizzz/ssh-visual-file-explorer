@@ -4,10 +4,12 @@
   "outputDirectory": "dist",
   "functions": {
     "api/ssh/download.ts": {
-      "maxDuration": 300
+      "maxDuration": 300,
+      "includeFiles": "src/server/**"
     },
     "api/ssh/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "src/server/**"
     }
   },
   "headers": [

@@ -1,6 +1,6 @@
-import { createDownloadToken } from "../../src/server/core";
-import type { SSHCredentials } from "../../src/types";
-import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils";
+import { createDownloadToken } from "../../src/server/core.js";
+import type { SSHCredentials } from "../../src/types.js";
+import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils.js";
 
 interface DownloadTicketRequestBody {
   credentials: SSHCredentials;

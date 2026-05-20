@@ -1,6 +1,6 @@
-import { deleteRemotePath } from "../../src/server/core";
-import type { SSHCredentials } from "../../src/types";
-import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils";
+import { deleteRemotePath } from "../../src/server/core.js";
+import type { SSHCredentials } from "../../src/types.js";
+import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils.js";
 
 interface DeleteRequestBody {
   credentials: SSHCredentials;

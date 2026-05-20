@@ -12,8 +12,8 @@ import {
   readRemoteFile,
   testConnection,
   writeRemoteFile,
-} from "./src/server/core";
-import type { SSHCredentials } from "./src/types";
+} from "./src/server/core.js";
+import type { SSHCredentials } from "./src/types.js";
 
 dotenv.config();
 

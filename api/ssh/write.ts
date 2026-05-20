@@ -1,6 +1,6 @@
-import { writeRemoteFile } from "../../src/server/core";
-import type { SSHCredentials } from "../../src/types";
-import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils";
+import { writeRemoteFile } from "../../src/server/core.js";
+import type { SSHCredentials } from "../../src/types.js";
+import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils.js";
 
 interface WriteRequestBody {
   credentials: SSHCredentials;

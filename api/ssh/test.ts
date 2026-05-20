@@ -1,6 +1,6 @@
-import { testConnection } from "../../src/server/core";
-import type { SSHCredentials } from "../../src/types";
-import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils";
+import { testConnection } from "../../src/server/core.js";
+import type { SSHCredentials } from "../../src/types.js";
+import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils.js";
 
 export default {
   async fetch(request: Request) {

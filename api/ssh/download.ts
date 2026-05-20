@@ -1,5 +1,5 @@
-import { openDownloadStream, parseDownloadToken, toWebStream } from "../../src/server/core";
-import { getErrorMessage, methodNotAllowed } from "../_utils";
+import { openDownloadStream, parseDownloadToken, toWebStream } from "../../src/server/core.js";
+import { getErrorMessage, methodNotAllowed } from "../_utils.js";
 
 export default {
   async fetch(request: Request) {

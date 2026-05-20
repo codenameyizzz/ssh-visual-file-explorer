@@ -1,6 +1,6 @@
-import { readRemoteFile } from "../../src/server/core";
-import type { SSHCredentials } from "../../src/types";
-import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils";
+import { readRemoteFile } from "../../src/server/core.js";
+import type { SSHCredentials } from "../../src/types.js";
+import { getErrorMessage, jsonResponse, methodNotAllowed, parseJsonRequest } from "../_utils.js";
 
 interface ReadRequestBody {
   credentials: SSHCredentials;
